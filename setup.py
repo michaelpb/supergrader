@@ -35,8 +35,8 @@ history = ''
 setup(
     name='supergrader',
     version='0.1.0',
-    description='Stow-like application for keeping '
-                'your dot-files under version control',
+    description='Automated grading and coding activity'
+                'quality maintenance',
     long_description=readme + '\n\n' + doclink + '\n\n' + history,
     author='michaelb',
     author_email='michaelpb@gmail.com',
