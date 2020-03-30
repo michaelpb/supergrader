@@ -8,6 +8,8 @@ Configurable automatic grading system for web programming and Computer Science
 classes, also useful for automating checks of directories of programming
 assignments.
 
+**NOTE:** Very unfinished, still a WIP.
+
 
 ## Installation
 
