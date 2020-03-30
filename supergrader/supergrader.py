@@ -1,14 +1,13 @@
 import argparse
 import os
 import sys
+import importlib
 
 _is_verbose = False
 parser = None
 
-
 class ArgError(ValueError):
     pass
-
 
 def parse_args(argv):
     global parser
@@ -19,6 +18,8 @@ def parse_args(argv):
 
     parser.add_argument('-v', '--verbose', help='increase output verbosity',
                         action='store_true')
+    parser.add_argument('-p', '--profile', default='profile',
+                        help='Python module path to "profile" module')
     parser.add_argument('directories', nargs='*',
                         help='one or more activity or assignment directories')
     args = parser.parse_args(argv)
@@ -62,64 +63,23 @@ def directory_walk(source_d, destination_d):
             yield full_source_path, full_destination_path
 
 
-def needed_symlink_walk(source_d, destination_d):
-    '''
-    Given a destination directory, walk through a source direct yielding all
-    paths that need symlinks, to make the destination resemble the source
-    '''
-    for source, destination in directory_walk(source_d, destination_d):
-        if os.path.islink(destination):
-            # Should doublecheck if is symlink to source
-            continue
-        yield source, destination
-
-
 def check_args(args):
     '''
     Raises value errors if args is missing something
     '''
-    if not args.packages:
+    if not args.directories:
         raise ArgError()
     if args.verbose:
         global _is_verbose
         _is_verbose = True
     # Expand all relevant user directories
-    args.source = os.path.expanduser(args.source)
-    args.destination = os.path.expanduser(args.destination)
-    args.backup = os.path.expanduser(args.backup)
+    #args.source = os.path.expanduser(args.source)
 
+def get_profile(args):
+    profile = importlib.import_module(args.profile)
 
-def get_backup_path(args, destination):
-    '''
-    Given parsed args, generates the full backup path for the destination file
-    '''
-    relpath = os.path.relpath(destination, args.destination).strip('/')
-    fullpath = os.path.join(args.backup, relpath)
-    backup_path = fullpath
-    tries = 0
-    while os.path.exists(backup_path) and tries < 10:
-        backup_path = '%s.%i' % (fullpath, tries)
-        if _is_verbose:
-            print('Backup path exists, trying %s' % backup_path)
-        tries += 1
-    return backup_path
-
-
-def do_backup(destination, backup_path):
-    try:
-        os.makedirs(os.path.dirname(backup_path))
-    except OSError:
-        pass
-    os.rename(destination, backup_path)
-
-
-def do_symlink(source, destination):
-    try:
-        os.makedirs(os.path.dirname(destination))
-    except OSError:
-        pass
-    os.symlink(source, destination)
-
+def get_validator_classes(profile):
+    return profile.VALIDATORS
 
 def main(args):
     try:
@@ -128,23 +88,14 @@ def main(args):
         parser.print_usage()
         sys.exit(1)
 
-    # Args are correct, lets now perform necessary steps
-    for source_d in source_directories(args):
-        needed_symlinks = needed_symlink_walk(source_d, args.destination)
-        for source, destination in needed_symlinks:
-            # Backup logic
-            if not args.skip_backup and os.path.exists(destination):
-                backup_path = get_backup_path(args, destination)
-                if _is_verbose:
-                    message_tmpl = 'Backing up {0} -> {1}'
-                    print(message_tmpl.format(destination, backup_path))
-                do_backup(destination, backup_path)
+    profile = load_profile(args)
+    validator_classes = get_validator_classes(profile)
 
-            # Symlink and dryrun logic
-            if _is_verbose or args.dryrun:
-                print('{0} -> {1}'.format(source, destination))
-            if not args.dryrun:
-                do_symlink(source, destination)
+    # Args are correct, lets now perform necessary steps
+    for source_d in args.directories:
+        for validator_class in validator_classes:
+            validator = validator_class()
+            validator.validate_directory(source_d)
 
 
 def cli():
