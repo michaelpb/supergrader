@@ -18,7 +18,7 @@ def parse_args(argv):
 
     parser.add_argument('-v', '--verbose', help='increase output verbosity',
                         action='store_true')
-    parser.add_argument('-p', '--profile', default='profile',
+    parser.add_argument('-p', '--profile', default='sgprofile',
                         help='Python module path to "profile" module')
     parser.add_argument('directories', nargs='*',
                         help='one or more activity or assignment directories')
@@ -76,20 +76,27 @@ def check_args(args):
     #args.source = os.path.expanduser(args.source)
 
 def get_profile(args):
+    sys.path.append(os.getcwd())
     profile = importlib.import_module(args.profile)
+    if not profile:
+        print('Unable to import profile. Stopping.')
+        raise ArgError()
+    if _is_verbose:
+        print('Loaded profile:', profile)
+    return profile
 
 def get_validator_classes(profile):
+    print(dir(profile))
     return profile.VALIDATORS
 
 def main(args):
     try:
         check_args(args)
+        profile = get_profile(args)
+        validator_classes = get_validator_classes(profile)
     except ArgError:
         parser.print_usage()
         sys.exit(1)
-
-    profile = load_profile(args)
-    validator_classes = get_validator_classes(profile)
 
     # Args are correct, lets now perform necessary steps
     for source_d in args.directories:
