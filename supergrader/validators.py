@@ -39,15 +39,15 @@ class ShellValidator(ValidatorBase):
             self.get_arguments(directory),
         )
 
-    def get_capture(self, in_resource, out_resource):
+    def get_capture(self, directory):
         return []
 
-    def _run_command(self, cmd, kwds, in_resource, out_resource):
+    def _run_command(self, cmd, kwds, directory):
         # Compute working directory and misc keyword args
-        kwds.setdefault('cwd', self.get_cwd(in_resource, out_resource))
+        kwds.setdefault('cwd', self.get_cwd(directory))
 
         # Run the command itself, capturing stdout and/or stderr as necessary
-        captures = self.get_capture(in_resource, out_resource)
+        captures = self.get_capture(directory)
         if captures:
             if set(captures) - set(['stdout', 'stderr']):
                 raise ValueError('Invalid captures: %s' % str(captures))

@@ -1,8 +1,11 @@
 # Testing profile during development
-from supergrader import ShellValidator
+import supergrader
+print(dir(supergrader))
 
-class EchoValidator(ShellValidator):
-    command = 'echo "Testing testing 123"'
+class EchoValidator(supergrader.validators.ShellValidator):
+    command = [
+        'echo "Testing testing 123"',
+    ]
 
 VALIDATORS = [
     EchoValidator,

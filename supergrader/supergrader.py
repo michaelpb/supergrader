@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import importlib
+import validators
 
 _is_verbose = False
 parser = None
