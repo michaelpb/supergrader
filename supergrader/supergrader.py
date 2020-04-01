@@ -2,7 +2,11 @@ import argparse
 import os
 import sys
 import importlib
+import traceback
+
+# 1st party
 import validators
+import utils
 
 _is_verbose = False
 parser = None
@@ -29,41 +33,6 @@ def parse_args(argv):
     return args
 
 
-def source_directories(args):
-    '''
-    Given parsed args, yield paths to all source directories
-    '''
-    for package_name in args.directories:
-        yield os.path.join(args.source, package_name)
-
-
-def munge_path(path):
-    '''
-    Replaces all files prefixed with '_' with ones prefixed with '.'
-    '''
-    return os.path.join(*[
-        node if not node.startswith('_') else '.%s' % node[1:]
-        for node in os.path.split(path)
-    ])
-
-
-def directory_walk(source_d, destination_d):
-    '''
-    Walk a directory structure and yield full parallel source and destination
-    files, munging filenames as necessary
-    '''
-    for dirpath, dirnames, filenames in os.walk(source_d):
-        relpath = os.path.relpath(dirpath, source_d).strip('./')
-        for filename in filenames:
-            suffix = filename
-            if relpath:
-                suffix = os.path.join(relpath, filename)
-            full_source_path = os.path.join(source_d, suffix)
-            full_destination_path = os.path.join(
-                destination_d, munge_path(suffix))
-            yield full_source_path, full_destination_path
-
-
 def check_args(args):
     '''
     Raises value errors if args is missing something
@@ -83,11 +52,10 @@ def get_profile(args):
         print('Unable to import profile. Stopping.')
         raise ArgError()
     if _is_verbose:
-        print('Loaded profile:', profile)
+        utils.trace('Loaded profile:', repr(profile))
     return profile
 
 def get_validator_classes(profile):
-    print(dir(profile))
     return profile.VALIDATORS
 
 def main(args):
@@ -99,12 +67,79 @@ def main(args):
         parser.print_usage()
         sys.exit(1)
 
+    results = {}
+
     # Args are correct, lets now perform necessary steps
     for source_d in args.directories:
+        if _is_verbose:
+            utils.trace('TARGET', source_d)
+        failures = 0
+        errors = 0
+        successes = 0
         for validator_class in validator_classes:
-            validator = validator_class()
-            validator.validate_directory(source_d)
 
+            # Check if validator class is actually a list or tuple that
+            # consists of the name of the function, and keyword args
+            if hasattr(validator_class, '__iter__'):
+                name, kwargs = validator_class
+                if hasattr(validators, name + '_validator'):
+                    name = name + '_validator'
+                validator_function = getattr(validators, name)
+                validator_class = validator_function(**kwargs)
+
+            validator = validator_class()
+            name = validator.get_name()
+
+            if _is_verbose:
+                utils.trace('Validator', name)
+
+            # Actually run the validator, catching exceptions to mark as
+            # failure
+            result = '.'
+            try:
+                validator.validate(source_d)
+                successes += 1
+            except validators.ValidationUnableToCheckError as e:
+                utils.failure(source_d, name)
+                failures += 1
+                result = '?'
+            except validators.ValidationError as e:
+                utils.failure(source_d, name)
+                failures += 1
+                result = 'F'
+                print(e)
+            except Exception as e:
+                utils.failure(source_d, name)
+                failures += 1
+                errors += 1
+                result = 'E'
+                traceback.print_exc()
+            else:
+                if _is_verbose:
+                    utils.success(source_d, name)
+
+            # Set the result to results
+            key = format_matrix_labels(source_d, name)
+            results[key] = result
+
+        if _is_verbose:
+            if not failures + errors:
+                utils.success(source_d, successes)
+            else:
+                utils.success(source_d, successes)
+                utils.failure(source_d + ' failures:', failures)
+                utils.failure(source_d + ' errors:', errors)
+    print_report(results)
+
+
+def format_matrix_labels(source_d, name):
+    dirname = source_d.strip('/')
+    return dirname, name
+
+
+def print_report(results):
+    s = utils.format_matrix(results)
+    print(s)
 
 def cli():
     main(parse_args(sys.argv))
