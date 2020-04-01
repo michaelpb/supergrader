@@ -67,15 +67,27 @@ def main(args):
         parser.print_usage()
         sys.exit(1)
 
-    results = {}
+    results_grid = {}
+    results_list = []
 
     # Args are correct, lets now perform necessary steps
     for source_d in args.directories:
         if _is_verbose:
             utils.trace('TARGET', source_d)
-        failures = 0
-        errors = 0
-        successes = 0
+        info = {
+            'directory': source_d,
+            'errors': 0,
+            'successes': 0,
+            'failures': 0,
+            'skipped': 0,
+            'messages': {
+                'error': [],
+                'skip': [],
+                'fail': [],
+                'feedback': [],
+            },
+        }
+        results_list.append(info)
         for validator_class in validator_classes:
 
             # Check if validator class is actually a list or tuple that
@@ -98,38 +110,47 @@ def main(args):
             result = '.'
             try:
                 validator.validate(source_d)
-                successes += 1
             except validators.ValidationUnableToCheckError as e:
-                utils.failure(source_d, name)
-                failures += 1
+                if _is_verbose:
+                    utils.failure(source_d, name)
+                info['skipped'] += 1
+                info['messages']['skip'].append(str(e))
                 result = '?'
             except validators.ValidationError as e:
-                utils.failure(source_d, name)
-                failures += 1
+                if _is_verbose:
+                    utils.failure(source_d, name)
+                info['failures'] += 1
                 result = 'F'
-                print(e)
+                info['messages']['fail'].append(str(e))
             except Exception as e:
-                utils.failure(source_d, name)
-                failures += 1
-                errors += 1
+                if _is_verbose:
+                    utils.failure(source_d, name)
+                info['failures'] += 1
+                info['errors'] += 1
                 result = 'E'
                 traceback.print_exc()
+                info['messages']['error'].append(str(e))
             else:
+                info['successes'] += 1
+                feedback = validator.get_feedback()
+                if feedback:
+                    info['messages']['feedback'].append(feedback)
                 if _is_verbose:
                     utils.success(source_d, name)
 
-            # Set the result to results
+            # Set the result to results_grid
             key = format_matrix_labels(source_d, name)
-            results[key] = result
+            results_grid[key] = result
+
 
         if _is_verbose:
-            if not failures + errors:
+            if not info['failures']:
                 utils.success(source_d, successes)
             else:
                 utils.success(source_d, successes)
                 utils.failure(source_d + ' failures:', failures)
                 utils.failure(source_d + ' errors:', errors)
-    print_report(results)
+    print_report(results_grid, results_list)
 
 
 def format_matrix_labels(source_d, name):
@@ -137,9 +158,29 @@ def format_matrix_labels(source_d, name):
     return dirname, name
 
 
-def print_report(results):
-    s = utils.format_matrix(results)
+def print_report(results_grid, results_list):
+    for result in results_list:
+        if result['failures'] + result['skipped']:
+            print_result(**result)
+        elif _is_verbose:
+            print_result(**result)
+    s = utils.format_matrix(results_grid)
     print(s)
+
+def print_result(directory, errors, successes, failures, skipped, messages):
+    print(
+        utils.Term.Bold(directory),
+        '-',
+        utils.Term.Green(successes),
+        utils.Term.Red(failures),
+        utils.Term.Yellow(skipped),
+    )
+
+    for category, message_list in messages.items():
+        if message_list:
+            print(' ' * 4 + '[' + category.upper() + ']')
+            for msg in message_list:
+                print(' ' * 8 + '-', msg)
 
 def cli():
     main(parse_args(sys.argv))

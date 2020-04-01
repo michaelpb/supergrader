@@ -1,27 +1,5 @@
 import sys
 
-def apply_command_list_template(command_list, directory, args):
-    '''
-    Perform necessary substitutions on a command list to create a CLI-ready
-    list to launch a validator process via system binary.
-    '''
-    replacements = {
-        '$DIR': directory,
-    }
-
-    # Add in positional arguments ($0, $1, etc)
-    for i, arg in enumerate(args):
-        replacements['$' + str(i)] = arg
-
-    results = [replacements.get(arg, arg) for arg in command_list]
-
-    # Returns list of truthy replaced arguments in command
-    return [item for item in results if item]
-
-
-
-
-
 #
 # Terminal output functions
 # A few old ass functions for making output to the terminal neater
@@ -51,6 +29,24 @@ def success(msg, arg=''):
 
 def failure(msg, arg=''):
     sys.stdout.write(Term.Red('[ ] FAIL   ') + msg + ((" "+Term.Purple(arg)) if arg else '') + "\n")
+
+def apply_command_list_template(command_list, directory, args):
+    '''
+    Perform necessary substitutions on a command list to create a CLI-ready
+    list to launch a validator process via system binary.
+    '''
+    replacements = {
+        '$DIR': directory,
+    }
+
+    # Add in positional arguments ($0, $1, etc)
+    for i, arg in enumerate(args):
+        replacements['$' + str(i)] = arg
+
+    results = [replacements.get(arg, arg) for arg in command_list]
+
+    # Returns list of truthy replaced arguments in command
+    return [item for item in results if item]
 
 
 def make_matrix(labels_top, labels_side, matrix, max_width=80):
@@ -83,13 +79,16 @@ def make_matrix(labels_top, labels_side, matrix, max_width=80):
 
 
 def tuple_dict_to_display_matrix(tuple_dict):
-    left_labels = set(left for left, right in tuple_dict.keys())
-    right_labels = set(right for left, right in tuple_dict.keys())
+    # Remove duplicates, sort, and split the left and right column labels
+    left_labels = sorted(list(set(left for left, _ in tuple_dict.keys())))
+    right_labels = sorted(list(set(right for _, right in tuple_dict.keys())))
+
+    # Build the matrix "list of lists" format for the tuple_dict
     matrix = [
         [tuple_dict.get((left, right)) for left in left_labels]
         for right in right_labels
     ]
-    return sorted(list(left_labels)), sorted(list(right_labels)), matrix
+    return left_labels, right_labels, matrix
 
 
 def format_matrix(tuple_dict):

@@ -1,7 +1,14 @@
 import subprocess
+import re
 import os.path
+import sys
 
 import utils
+
+INFINITY = sys.maxsize
+
+class ConfigurationError(Exception):
+    pass
 
 class ValidationError(Exception):
     pass
@@ -14,6 +21,9 @@ class ValidatorBase:
         if hasattr(self, 'name'):
             return self.name
         return self.__class__.__name__
+
+    def get_feedback(self):
+        return None
 
     @classmethod
     def as_function(cls):
@@ -66,9 +76,9 @@ class ShellValidator(ValidatorBase):
         captures = self.get_capture(directory)
         if captures:
             if set(captures) - set(['stdout', 'stderr']):
-                raise ValueError('Invalid captures: %s' % str(captures))
+                raise ConfigurationError('Invalid captures: %s' % str(captures))
 
-            raise ValueError('Captures not yet implemented')
+            raise ConfigurationError('Captures not yet implemented')
             for capture in captures:
                 kwds[capture] = fd
             result = subprocess.run(cmd, **kwds)
@@ -103,7 +113,7 @@ class FileStructureValidator(ValidatorBase):
         fails = []
         self._recurse_validate(dir_tree, directory, fails)
         if fails:
-            raise ValidationError('Could not find: ' + ' '.join(fails))
+            raise ValidationError('Could not find: ' + ', '.join(fails))
 
     def _recurse_validate(self, dir_tree_node, root_dir, fails):
         if isinstance(dir_tree_node, str):
@@ -121,6 +131,81 @@ class FileStructureValidator(ValidatorBase):
             else:
                 fails.append(path)
 
+
+class FileTextValidator(ValidatorBase):
+    regexp_whitespace = re.compile(r'\s+', re.MULTILINE)
+
+    def get_fuzzy_text(self, directory):
+        raise ValueError('not implemented yet')
+
+    def get_regexp(self, directory):
+        raise ValueError('not implemented yet')
+        return None
+
+    def get_text(self, directory):
+        return self.text
+
+    def get_range(self, directory):
+        exact_count = getattr(self, 'exact_count', None)
+        if exact_count:
+            return range(exact_count, exact_count + 1)
+
+        max_count = getattr(self, 'max_count', None)
+        min_count = getattr(self, 'min_count', None)
+        step_count = getattr(self, 'step_count', None)
+        if not max_count and not min_count:
+            return None
+
+        if max_count:
+            max_count += 1 # make inclusive
+        else:
+            max_count = INFINITY
+        if min_count and step_count:
+            return range(min_count, max_count, step_count)
+        elif min_count:
+            return range(min_count, max_count)
+        else:
+            return range(max_count)
+
+    def get_count(self, directory):
+        return getattr(self, 'count', None)
+
+    def sanitize(self, text, is_search=False):
+        if getattr(self, 'normalize_whitespace', False):
+            text = re.sub(self.regexp_whitespace, ' ', text)
+        if getattr(self, 'ignore_case', False):
+            text = text.lower()
+        if not is_search:
+            if getattr(self, 'whole_word_only', False):
+                text = text.split()
+        return text
+
+    def validate(self, directory):
+        full_path = os.path.join(directory, self.path)
+        if not os.path.exists(path):
+            raise ValidationError(f'Expected file does not exist: {self.path}')
+        file_contents = self.sanitize(open(full_path).read())
+        text = self.get_text()
+        sanitized_text = self.sanitize(text, is_search=True)
+        if sanitized_text not in file_contents:
+            raise ValidationError(f'{self.path} does not contain "{text}"')
+
+        expected_range = self.get_range()
+        if expected_range:
+            actual_count = file_contents.count(sanitized_text)
+            msg = f'{self.path} contains {actual_count} instances of {text}'
+            if actual_count not in expected_range:
+                if expected_range.stop == INFINITY:
+                    msg += f'(instead of at least {actual_range.start}'
+                else:
+                    msg += f'(instead of between {actual_range.start} and {actual_range.stop}'
+                if expected_range.step != 1:
+                    msg += f', step {expected_range.step}'
+                msg += ')'
+                raise ValidationError(msg)
+
+
 shell_validator = ShellValidator.as_function()
 file_structure_validator = FileStructureValidator.as_function()
+file_text_validator = FileTextValidator.as_function()
 
