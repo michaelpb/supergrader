@@ -20,10 +20,11 @@ def parse_args(argv):
         prog='supergrader',
         description='Symlink files recursively, good for dotfiles.'
     )
+    supergrader_profile = os.environ.get('SUPERGRADER_PROFILE', 'sgprofile')
 
     parser.add_argument('-v', '--verbose', help='increase output verbosity',
                         action='store_true')
-    parser.add_argument('-p', '--profile', default='sgprofile',
+    parser.add_argument('-p', '--profile', default=supergrader_profile,
                         help='Python module path to "profile" module')
     parser.add_argument('directories', nargs='*',
                         help='one or more activity or assignment directories')
