@@ -135,17 +135,10 @@ class FileStructureValidator(ValidatorBase):
 class FileTextValidator(ValidatorBase):
     regexp_whitespace = re.compile(r'\s+', re.MULTILINE)
 
-    def get_fuzzy_text(self, directory):
-        raise ValueError('not implemented yet')
-
-    def get_regexp(self, directory):
-        raise ValueError('not implemented yet')
-        return None
-
-    def get_text(self, directory):
+    def get_text(self):
         return self.text
 
-    def get_range(self, directory):
+    def get_range(self):
         exact_count = getattr(self, 'exact_count', None)
         if exact_count:
             return range(exact_count, exact_count + 1)
@@ -167,9 +160,6 @@ class FileTextValidator(ValidatorBase):
         else:
             return range(max_count)
 
-    def get_count(self, directory):
-        return getattr(self, 'count', None)
-
     def sanitize(self, text, is_search=False):
         if getattr(self, 'normalize_whitespace', False):
             text = re.sub(self.regexp_whitespace, ' ', text)
@@ -182,7 +172,7 @@ class FileTextValidator(ValidatorBase):
 
     def validate(self, directory):
         full_path = os.path.join(directory, self.path)
-        if not os.path.exists(path):
+        if not os.path.exists(full_path):
             raise ValidationError(f'Expected file does not exist: {self.path}')
         file_contents = self.sanitize(open(full_path).read())
         text = self.get_text()
@@ -193,12 +183,15 @@ class FileTextValidator(ValidatorBase):
         expected_range = self.get_range()
         if expected_range:
             actual_count = file_contents.count(sanitized_text)
-            msg = f'{self.path} contains {actual_count} instances of {text}'
+            msg = f'{self.path} contains {actual_count} instances of "{text}" '
             if actual_count not in expected_range:
+                max_count = expected_range.stop - 1
                 if expected_range.stop == INFINITY:
-                    msg += f'(instead of at least {actual_range.start}'
+                    msg += f'(instead of at least {expected_range.start}'
+                elif expected_range.start == max_count:
+                    msg += f'(instead of at exactly {expected_range.start}'
                 else:
-                    msg += f'(instead of between {actual_range.start} and {actual_range.stop}'
+                    msg += f'(instead of between {expected_range.start} and {max_count}'
                 if expected_range.step != 1:
                     msg += f', step {expected_range.step}'
                 msg += ')'
